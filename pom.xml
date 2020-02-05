@@ -11,9 +11,9 @@
   <groupId>io.snyk.plugins</groupId>
   <artifactId>nexus-snyk-security-plugin</artifactId>
   <version>${revision}</version>
-  <packaging>bundle</packaging>
+  <packaging>pom</packaging>
 
-  <name>Nexus Snyk Security :: Plugin</name>
+  <name>Nexus Snyk Security :: Aggregator</name>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -34,6 +34,20 @@
     <version.junit5>5.4.2</version.junit5>
     <version.retrofit2>2.6.0</version.retrofit2>
   </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs>
+            <arg>-Xlint:all</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 
   <dependencyManagement>
     <dependencies>
@@ -65,149 +79,10 @@
     </dependencies>
   </dependencyManagement>
 
-  <dependencies>
-    <dependency>
-      <groupId>com.squareup.retrofit2</groupId>
-      <artifactId>converter-jackson</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.squareup.retrofit2</groupId>
-      <artifactId>retrofit</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>com.google.code.findbugs</groupId>
-      <artifactId>jsr305</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.sonatype.nexus</groupId>
-      <artifactId>nexus-capability</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.sonatype.nexus</groupId>
-      <artifactId>nexus-core</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.sonatype.nexus</groupId>
-      <artifactId>nexus-plugin-api</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.sonatype.nexus</groupId>
-      <artifactId>nexus-repository</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.sonatype.nexus</groupId>
-      <artifactId>nexus-rapture</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.sonatype.nexus</groupId>
-      <artifactId>nexus-security</artifactId>
-      <scope>provided</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.sonatype.nexus.plugins</groupId>
-      <artifactId>nexus-repository-maven</artifactId>
-      <scope>provided</scope>
-    </dependency>
-  </dependencies>
-
-  <build>
-    <finalName>nexus-snyk-security-plugin</finalName>
-    <plugins>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <compilerArgs>
-            <arg>-Xlint:all</arg>
-          </compilerArgs>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.felix</groupId>
-        <artifactId>maven-bundle-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>default-bundle</id>
-            <phase>package</phase>
-            <goals>
-              <goal>bundle</goal>
-            </goals>
-          </execution>
-        </executions>
-        <extensions>true</extensions>
-        <configuration>
-          <instructions>
-            <Bundle-SymbolicName>nexus-snyk-security-plugin</Bundle-SymbolicName>
-            <Bundle-Description>nexus-snyk-security-plugin</Bundle-Description>
-<!--            <Embed-Dependency>-->
-<!--              *;scope=compile|runtime-->
-<!--            </Embed-Dependency>-->
-            <Embed-Transitive>true</Embed-Transitive>
-            <Export-Package>
-              io.snyk.plugins.nexus.*,
-              io.snyk.sdk.*,
-              okhttp3,
-              okio,
-              retrofit2,
-              retrofit2.http,
-              retrofit2.converter.jackson
-            </Export-Package>
-            <Import-Package>
-              io.snyk.sdk.api.v1,
-              io.snyk.sdk.interceptor,
-              com.fasterxml.jackson.annotation,
-              com.fasterxml.jackson.databind,
-              okhttp3,
-              okio,
-              retrofit2,
-              retrofit2.http,
-              javax.inject,
-              javax.net,
-              javax.net.ssl,
-              org.slf4j,
-              org.osgi.framework,
-              org.sonatype.nexus.*
-            </Import-Package>
-<!--            <Export-Package>-->
-<!--              io.snyk.plugins.*,-->
-<!--              io.snyk.sdk.*,-->
-<!--              retrofit2,-->
-<!--              retrofit2.http,-->
-<!--              okhttp3,-->
-<!--              okio-->
-<!--            </Export-Package>-->
-<!--            <Import-Package>-->
-<!--              javax.inject,-->
-<!--              javax.net,-->
-<!--              javax.net.ssl,-->
-<!--              org.slf4j,-->
-<!--              org.osgi.framework,-->
-<!--              org.sonatype.nexus.capability,-->
-<!--              org.sonatype.nexus.repository-->
-<!--            </Import-Package>-->
-<!--            <Include-Resource>target/classes,{maven-resources}</Include-Resource>-->
-          </instructions>
-        </configuration>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.karaf.tooling</groupId>
-        <artifactId>karaf-maven-plugin</artifactId>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <configuration>
-          <useSystemClassLoader>false</useSystemClassLoader>
-        </configuration>
-      </plugin>
-    </plugins>
-  </build>
+  <modules>
+    <module>plugin</module>
+    <module>snyk-sdk</module>
+  </modules>
 
   <repositories>
     <repository>

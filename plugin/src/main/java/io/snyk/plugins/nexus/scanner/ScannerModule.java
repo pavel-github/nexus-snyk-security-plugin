@@ -8,22 +8,23 @@ import java.util.HashMap;
 import java.util.List;
 
 import io.snyk.plugins.nexus.capability.SnykSecurityCapabilityConfiguration;
-import io.snyk.plugins.nexus.capability.SnykSecurityCapabilityLocator;
+import io.snyk.sdk.api.v1.SnykClient;
 import io.snyk.sdk.model.Issue;
 import io.snyk.sdk.model.Severity;
 import io.snyk.sdk.model.TestResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonatype.nexus.common.collect.NestedAttributesMap;
-import org.sonatype.nexus.common.entity.DetachedEntityId;
+import org.sonatype.nexus.repository.browse.BrowseResult;
+import org.sonatype.nexus.repository.browse.BrowseService;
 import org.sonatype.nexus.repository.maven.MavenPath;
 import org.sonatype.nexus.repository.maven.MavenPathParser;
 import org.sonatype.nexus.repository.storage.Asset;
 import org.sonatype.nexus.repository.storage.AssetStore;
 import org.sonatype.nexus.repository.storage.Component;
 import org.sonatype.nexus.repository.storage.ComponentStore;
-import org.sonatype.nexus.repository.storage.DefaultComponentFinder;
 import org.sonatype.nexus.repository.view.Context;
+import org.sonatype.nexus.transaction.Transactional;
 
 import static java.lang.String.format;
 
@@ -33,23 +34,30 @@ public class ScannerModule {
   private static final Logger LOG = LoggerFactory.getLogger(ScannerModule.class);
 
   @Inject
-  private SnykSecurityCapabilityLocator capabilityLocator;
+  private ConfigurationHelper configurationHelper;
   @Inject
   private MavenPathParser mavenPathParser;
   @Inject
   private MavenScanner mavenScanner;
   @Inject
-  private DefaultComponentFinder componentFinder;
-  @Inject
   private AssetStore assetStore;
   @Inject
   private ComponentStore componentStore;
+  @Inject
+  private BrowseService browseService;
+
+  private SnykClient snykClient;
+  private SnykSecurityCapabilityConfiguration configuration;
 
   void scanComponent(@Nonnull Context context) {
-    SnykSecurityCapabilityConfiguration config = capabilityLocator.getSnykSecurityCapabilityConfiguration();
-    LOG.error("Capability Locator config: {}", config);
+    if (snykClient == null) {
+      snykClient = configurationHelper.getSnykClient();
+    }
+    if (configuration == null) {
+      configuration = configurationHelper.getConfiguration();
+    }
 
-    String vulnerabilityThreshold = config.getVulnerabilityThreshold();
+    String vulnerabilityThreshold = configuration.getVulnerabilityThreshold();
     if ("none".equals(vulnerabilityThreshold)) {
       LOG.warn("No scan needed");
       return;
@@ -70,7 +78,7 @@ public class ScannerModule {
         LOG.warn("Coordinates are null for {}", parsedMavenPath);
       } else {
         if ("jar".equals(coordinates.getExtension())) {
-          testResult = mavenScanner.scan(coordinates);
+          testResult = mavenScanner.scan(coordinates, snykClient, configuration.getOrganizationId());
         } else {
           LOG.warn("Extension is not supported: {}", mavenPath.getPath());
         }
@@ -101,35 +109,20 @@ public class ScannerModule {
 
     HashMap<String, String> filter = new HashMap<>(1);
     filter.put("version", coordinates.getVersion());
-    List<Component> component = componentStore.getAllMatchingComponents(context.getRepository(), coordinates.getGroupId(), coordinates.getArtifactId(), filter);
-    component.get(0).bucketId();
+    List<Component> components = componentStore.getAllMatchingComponents(context.getRepository(), coordinates.getGroupId(), coordinates.getArtifactId(), filter);
+    Component component = components.get(0);
 
-    List<Component> matchingComponents = componentFinder.findMatchingComponents(context.getRepository(),
-                                                                                "93b9b9eb9a7ecb068c2b46d2958ca10c",
-                                                                                coordinates.getGroupId(),
-                                                                                coordinates.getArtifactId(),
-                                                                                coordinates.getVersion());
-
-    LOG.error("Found components: {}", matchingComponents.size());
-    for (Component matchingComponent : matchingComponents) {
-      NestedAttributesMap attributes = matchingComponent.attributes();
-      attributes.forEach(entry -> LOG.error("key: {}, value: {}", entry.getKey(), entry.getValue()));
+    BrowseResult<Asset> assetBrowseResult = browseService.browseComponentAssets(context.getRepository(), component);
+    Asset asset = assetBrowseResult.getResults().stream()
+                                   .filter(e -> "application/java-archive".equals(e.contentType()))
+                                   .findFirst().orElse(null);
+    if (asset == null) {
+      return;
     }
-
-    DetachedEntityId entityId = new DetachedEntityId("7f6379d32f8dd78f85193cd13bb4f3e5");
-    Asset asset = assetStore.getById(entityId);
-    LOG.error("Found asset: {}", asset);
 
     NestedAttributesMap snykSecurityMap = asset.attributes().child("Snyk Security");
     snykSecurityMap.clear();
 
-    // snykSecurityMap.set("vulnerability_issues_high", testResult.issues.vulnerabilities.stream().filter(issue -> issue.severity == Severity.HIGH).count());
-    // snykSecurityMap.set("vulnerability_issues_medium", testResult.issues.vulnerabilities.stream().filter(issue -> issue.severity == Severity.MEDIUM).count());
-    // snykSecurityMap.set("vulnerability_issues_low", testResult.issues.vulnerabilities.stream().filter(issue -> issue.severity == Severity.LOW).count());
-    //
-    // snykSecurityMap.set("license_issues_high", testResult.issues.licenses.stream().filter(issue -> issue.severity == Severity.HIGH).count());
-    // snykSecurityMap.set("license_issues_medium", testResult.issues.licenses.stream().filter(issue -> issue.severity == Severity.MEDIUM).count());
-    // snykSecurityMap.set("license_issues_low", testResult.issues.licenses.stream().filter(issue -> issue.severity == Severity.LOW).count());
     snykSecurityMap.set("issues_vulnerabilities", getIssuesAsFormattedString(testResult.issues.vulnerabilities));
     snykSecurityMap.set("issues_licenses", getIssuesAsFormattedString(testResult.issues.licenses));
     StringBuilder snykIssueUrl = new StringBuilder("https://snyk.io/vuln/");
